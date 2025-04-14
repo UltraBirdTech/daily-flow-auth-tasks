@@ -139,7 +139,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ open, onClose, editTask }) => {
                     <SelectValue placeholder="カテゴリーを選択" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">なし</SelectItem>
+                    <SelectItem value="none">なし</SelectItem>
                     {categories.map((category) => (
                       <SelectItem key={category.id} value={category.id}>
                         {category.name}
