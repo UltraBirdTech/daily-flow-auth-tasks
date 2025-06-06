@@ -1,24 +1,24 @@
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import type { Database } from '@/lib/supabase';
 
-type Todo = Database['public']['Tables']['todos']['Row'];
+interface Todo {
+  id: string;
+  text: string;
+  completed: boolean;
+  created_at: string;
+  user_id: string;
+}
 
-export const useTodos = (userId: string | undefined) => {
-  const [todos, setTodos] = useState<Todo[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+export const useTodos = (userId: string) => {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (userId) {
-      fetchTodos();
-    }
-  }, [userId]);
-
-  const fetchTodos = async () => {
-    try {
+  const { data: todos = [], isLoading, refetch } = useQuery({
+    queryKey: ['todos', userId],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('todos')
         .select('*')
@@ -26,100 +26,89 @@ export const useTodos = (userId: string | undefined) => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setTodos(data || []);
-    } catch (error: any) {
-      toast({
-        title: "データ取得エラー",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return data as Todo[];
+    },
+    enabled: !!userId,
+  });
 
-  const addTodo = async (text: string) => {
-    if (!userId) return;
-
-    try {
+  const addTodoMutation = useMutation({
+    mutationFn: async (text: string) => {
       const { data, error } = await supabase
         .from('todos')
-        .insert([
-          {
-            text,
-            user_id: userId,
-            completed: false,
-          },
-        ])
+        .insert([{ text, user_id: userId }])
         .select()
         .single();
 
       if (error) throw error;
-      setTodos([data, ...todos]);
-
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['todos', userId] });
       toast({
         title: "タスクを追加しました",
-        description: text,
       });
-    } catch (error: any) {
+    },
+    onError: (error: any) => {
       toast({
-        title: "追加エラー",
+        title: "エラー",
         description: error.message,
         variant: "destructive",
       });
-    }
-  };
+    },
+  });
 
-  const toggleTodo = async (id: string, completed: boolean) => {
-    try {
+  const toggleTodoMutation = useMutation({
+    mutationFn: async ({ id, completed }: { id: string; completed: boolean }) => {
       const { error } = await supabase
         .from('todos')
         .update({ completed })
         .eq('id', id);
 
       if (error) throw error;
-
-      setTodos(todos.map(todo =>
-        todo.id === id ? { ...todo, completed } : todo
-      ));
-    } catch (error: any) {
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['todos', userId] });
+    },
+    onError: (error: any) => {
       toast({
-        title: "更新エラー",
+        title: "エラー",
         description: error.message,
         variant: "destructive",
       });
-    }
-  };
+    },
+  });
 
-  const deleteTodo = async (id: string) => {
-    try {
+  const deleteTodoMutation = useMutation({
+    mutationFn: async (id: string) => {
       const { error } = await supabase
         .from('todos')
         .delete()
         .eq('id', id);
 
       if (error) throw error;
-
-      setTodos(todos.filter(todo => todo.id !== id));
-
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['todos', userId] });
       toast({
         title: "タスクを削除しました",
       });
-    } catch (error: any) {
+    },
+    onError: (error: any) => {
       toast({
-        title: "削除エラー",
+        title: "エラー",
         description: error.message,
         variant: "destructive",
       });
-    }
-  };
+    },
+  });
 
   return {
     todos,
     isLoading,
-    addTodo,
-    toggleTodo,
-    deleteTodo,
-    refetch: fetchTodos,
+    refetch,
+    addTodo: addTodoMutation.mutate,
+    toggleTodo: (id: string, completed: boolean) =>
+      toggleTodoMutation.mutate({ id, completed }),
+    deleteTodo: deleteTodoMutation.mutate,
   };
 };
