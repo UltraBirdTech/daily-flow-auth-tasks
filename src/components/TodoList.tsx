@@ -1,48 +1,27 @@
 
 import React, { useState } from 'react';
+import { User } from '@supabase/supabase-js';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Trash2, Plus, LogOut } from 'lucide-react';
-
-interface Todo {
-  id: string;
-  text: string;
-  completed: boolean;
-  createdAt: Date;
-}
+import { Trash2, Plus, LogOut, RefreshCw } from 'lucide-react';
+import { useTodos } from '@/hooks/useTodos';
 
 interface TodoListProps {
-  user: { email: string };
+  user: User;
   onLogout: () => void;
 }
 
 const TodoList: React.FC<TodoListProps> = ({ user, onLogout }) => {
-  const [todos, setTodos] = useState<Todo[]>([]);
   const [newTodo, setNewTodo] = useState('');
+  const { todos, isLoading, addTodo, toggleTodo, deleteTodo, refetch } = useTodos(user.id);
 
-  const addTodo = () => {
+  const handleAddTodo = async () => {
     if (newTodo.trim()) {
-      const todo: Todo = {
-        id: Date.now().toString(),
-        text: newTodo.trim(),
-        completed: false,
-        createdAt: new Date(),
-      };
-      setTodos([...todos, todo]);
+      await addTodo(newTodo.trim());
       setNewTodo('');
     }
-  };
-
-  const toggleTodo = (id: string) => {
-    setTodos(todos.map(todo =>
-      todo.id === id ? { ...todo, completed: !todo.completed } : todo
-    ));
-  };
-
-  const deleteTodo = (id: string) => {
-    setTodos(todos.filter(todo => todo.id !== id));
   };
 
   const completedCount = todos.filter(todo => todo.completed).length;
@@ -54,27 +33,30 @@ const TodoList: React.FC<TodoListProps> = ({ user, onLogout }) => {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">Daily Flow</h1>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">Welcome, {user.email}</span>
+            <span className="text-sm text-gray-600">ようこそ、{user.email}</span>
+            <Button variant="outline" size="sm" onClick={refetch}>
+              <RefreshCw className="w-4 h-4" />
+            </Button>
             <Button variant="outline" onClick={onLogout}>
               <LogOut className="w-4 h-4 mr-2" />
-              Logout
+              ログアウト
             </Button>
           </div>
         </div>
 
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Add New Task</CardTitle>
+            <CardTitle>新しいタスクを追加</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex gap-2">
               <Input
                 value={newTodo}
                 onChange={(e) => setNewTodo(e.target.value)}
-                placeholder="Enter a new task..."
-                onKeyPress={(e) => e.key === 'Enter' && addTodo()}
+                placeholder="新しいタスクを入力..."
+                onKeyPress={(e) => e.key === 'Enter' && handleAddTodo()}
               />
-              <Button onClick={addTodo}>
+              <Button onClick={handleAddTodo} disabled={!newTodo.trim()}>
                 <Plus className="w-4 h-4" />
               </Button>
             </div>
@@ -84,13 +66,17 @@ const TodoList: React.FC<TodoListProps> = ({ user, onLogout }) => {
         <Card>
           <CardHeader>
             <CardTitle>
-              Tasks ({completedCount}/{totalCount})
+              タスク ({completedCount}/{totalCount})
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {todos.length === 0 ? (
+            {isLoading ? (
               <p className="text-gray-500 text-center py-8">
-                No tasks yet. Add one above!
+                読み込み中...
+              </p>
+            ) : todos.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">
+                まだタスクがありません。上から追加してください！
               </p>
             ) : (
               <div className="space-y-2">
@@ -101,7 +87,7 @@ const TodoList: React.FC<TodoListProps> = ({ user, onLogout }) => {
                   >
                     <Checkbox
                       checked={todo.completed}
-                      onCheckedChange={() => toggleTodo(todo.id)}
+                      onCheckedChange={(checked) => toggleTodo(todo.id, checked as boolean)}
                     />
                     <span
                       className={`flex-1 ${

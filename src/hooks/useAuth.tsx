@@ -1,53 +1,101 @@
 
 import { useState, useEffect } from 'react';
-
-interface User {
-  email: string;
-}
+import { User } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
+import { useToast } from '@/hooks/use-toast';
 
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
-    // Check if user is logged in on app start
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
-    setIsLoading(false);
+    // Get initial session
+    const getInitialSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user ?? null);
+      setIsLoading(false);
+    };
+
+    getInitialSession();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setUser(session?.user ?? null);
+        setIsLoading(false);
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = async (email: string, password: string) => {
-    // For demo purposes, we'll simulate authentication
-    // In a real app, this would connect to your backend/Supabase
-    console.log('Login attempt:', { email, password });
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const user = { email };
-    setUser(user);
-    localStorage.setItem('user', JSON.stringify(user));
-    return user;
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "ログインしました",
+        description: "Daily Flowへようこそ！",
+      });
+
+      return data.user;
+    } catch (error: any) {
+      toast({
+        title: "ログインエラー",
+        description: error.message,
+        variant: "destructive",
+      });
+      throw error;
+    }
   };
 
   const signup = async (email: string, password: string) => {
-    // For demo purposes, we'll simulate user creation
-    console.log('Signup attempt:', { email, password });
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const user = { email };
-    setUser(user);
-    localStorage.setItem('user', JSON.stringify(user));
-    return user;
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "アカウントを作成しました",
+        description: "確認メールをチェックしてください",
+      });
+
+      return data.user;
+    } catch (error: any) {
+      toast({
+        title: "サインアップエラー",
+        description: error.message,
+        variant: "destructive",
+      });
+      throw error;
+    }
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('user');
+  const logout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+
+      toast({
+        title: "ログアウトしました",
+        description: "また次回お会いしましょう！",
+      });
+    } catch (error: any) {
+      toast({
+        title: "ログアウトエラー",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
 
   return {
