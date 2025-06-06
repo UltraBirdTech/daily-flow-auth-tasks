@@ -5,10 +5,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { User } from '@supabase/supabase-js';
 
 interface AuthFormProps {
-  onLogin: (email: string, password: string) => Promise<void>;
-  onSignup: (email: string, password: string) => Promise<void>;
+  onLogin: (email: string, password: string) => Promise<User | null>;
+  onSignup: (email: string, password: string) => Promise<User | null>;
 }
 
 const AuthForm: React.FC<AuthFormProps> = ({ onLogin, onSignup }) => {
